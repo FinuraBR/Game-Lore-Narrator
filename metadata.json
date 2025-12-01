@@ -1,0 +1,5 @@
+{
+  "name": "Game Lore Narrator",
+  "description": "Extract and narrate game lore from screenshots using Gemini Vision and TTS.",
+  "requestFramePermissions": []
+}
