@@ -8,16 +8,29 @@ const API_KEY = process.env.API_KEY || '';
 // Initialize client
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
+// Default Prompt constant (moved outside function for reusability if needed)
+const DEFAULT_OCR_PROMPT = `You are a specialized OCR engine for video game screenshots.
+Your Task: Analyze the image and extract only the narrative (lore) text.
+
+Visual Processing Rules:
+1. SEGMENTATION: Visually differentiate what is "document/paper" from the game's UI/HUD.
+2. EXCLUSION: Ignore all peripheral UI elements: Menus (ESC, Options, Start), button commands (Press 'A' to Zoom), counters (Level, Resources).
+3. EXTRACTION: Transcribe the body text exactly as it appears, respecting all original punctuation and paragraph breaks.
+4. OUTPUT: Provide only the clean text, without any additional comments.`;
+
 /**
  * Extracts lore text from an image using Gemini 3 Pro (Vision).
  * Uses Thinking Mode for high precision segmentation.
  */
-export const extractLoreText = async (base64Image: string): Promise<string> => {
+export const extractLoreText = async (base64Image: string, customPrompt?: string): Promise<string> => {
   console.log(`[Gemini Service] Starting OCR extraction. Image size: ${base64Image.length} chars`);
   
   if (!base64Image) throw new Error("No image provided");
 
   const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, "");
+
+  // Use custom prompt if provided, otherwise default
+  const promptToUse = customPrompt || DEFAULT_OCR_PROMPT;
 
   try {
     const response = await ai.models.generateContent({
@@ -45,14 +58,7 @@ export const extractLoreText = async (base64Image: string): Promise<string> => {
             }
           },
           {
-            text: `You are a specialized OCR engine for video game screenshots.
-Your Task: Analyze the image and extract only the narrative (lore) text.
-
-Visual Processing Rules:
-1. SEGMENTATION: Visually differentiate what is "document/paper" from the game's UI/HUD.
-2. EXCLUSION: Ignore all peripheral UI elements: Menus (ESC, Options, Start), button commands (Press 'A' to Zoom), counters (Level, Resources).
-3. EXTRACTION: Transcribe the body text exactly as it appears, respecting all original punctuation and paragraph breaks.
-4. OUTPUT: Provide only the clean text, without any additional comments.`
+            text: promptToUse
           }
         ]
       },

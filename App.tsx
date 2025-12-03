@@ -1,11 +1,24 @@
 // App.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Gamepad2, Mic2 } from 'lucide-react';
+import { Gamepad2, Mic2, ScanEye } from 'lucide-react';
 import ImageUploader from './components/ImageUploader';
 import ExtractionPanel from './components/ExtractionPanel';
 import { AppState } from './types';
 import { extractLoreText, generateLoreNarration, summarizeLore, translateLoreText } from './services/geminiService';
+
+const DEFAULT_OCR_PROMPT = `You are a specialized OCR engine for video game screenshots.
+Your Task: Analyze the image and extract only the narrative (lore) text.
+
+Visual Processing Rules:
+1. SEGMENTATION: Visually differentiate what is "document/paper" from the game's UI/HUD.
+2. EXCLUSION: Ignore all peripheral UI elements: Menus (ESC, Options, Start), button commands (Press 'A' to Zoom), counters (Level, Resources).
+3. EXTRACTION: Transcribe the body text exactly as it appears, respecting all original punctuation and paragraph breaks.
+4. OUTPUT: Provide only the clean text, without any additional comments.`;
+
+const STORAGE_KEYS = {
+  OCR_PROMPT: 'vgs_ocr_prompt'
+};
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
@@ -15,6 +28,16 @@ const App: React.FC = () => {
     summary: null,
     isSummarizing: false,
   });
+
+  // Estado para o prompt de OCR
+  const [ocrPrompt, setOcrPrompt] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.OCR_PROMPT) || DEFAULT_OCR_PROMPT;
+  });
+
+  // Salvar no localStorage sempre que mudar
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.OCR_PROMPT, ocrPrompt);
+  }, [ocrPrompt]);
 
   const handleImageSelected = useCallback(async (base64: string) => {
     console.log("[App] Image selected/pasted. Starting process...");
@@ -30,8 +53,8 @@ const App: React.FC = () => {
     }));
 
     try {
-      // 1. Extract Text
-      const text = await extractLoreText(base64);
+      // 1. Extract Text (PASSANDO O PROMPT PERSONALIZADO AQUI)
+      const text = await extractLoreText(base64, ocrPrompt);
       console.log("[App] Text extraction successful. Updating state.");
       setState(prev => ({
         ...prev,
@@ -48,7 +71,7 @@ const App: React.FC = () => {
         }
       }));
     }
-  }, []);
+  }, [ocrPrompt]); // Dependência adicionada
 
   // Global Paste Listener
   useEffect(() => {
@@ -172,7 +195,7 @@ const App: React.FC = () => {
         {/* Main Content Grid */}
         <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:h-[calc(100vh-200px)]">
           
-          {/* Left Panel: Image Input */}
+          {/* Left Panel: Image Input + OCR Settings */}
           <section className="flex flex-col gap-4 h-full">
             <div className="flex-1 min-h-[400px]">
               <ImageUploader 
@@ -181,6 +204,30 @@ const App: React.FC = () => {
               />
             </div>
             
+            {/* OCR Settings Panel */}
+            <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 space-y-3">
+              <div className="flex items-center gap-2 text-slate-300 pb-2 border-b border-slate-800/50">
+                <ScanEye size={16} className="text-cyan-500" />
+                <span className="text-xs font-semibold uppercase tracking-wider">Vision OCR Prompt</span>
+              </div>
+              
+              <textarea 
+                value={ocrPrompt}
+                onChange={(e) => setOcrPrompt(e.target.value)}
+                className="w-full h-32 bg-slate-800 border border-slate-700 rounded-lg p-3 text-xs text-slate-300 focus:ring-1 focus:ring-cyan-500 focus:outline-none resize-none font-mono leading-relaxed"
+                placeholder="Enter instructions for the Vision model..."
+              />
+              <div className="text-[10px] text-slate-500 flex justify-between">
+                 <span>Instructions for Gemini 3 Pro Vision</span>
+                 <button 
+                    onClick={() => setOcrPrompt(DEFAULT_OCR_PROMPT)}
+                    className="hover:text-cyan-400 underline decoration-dotted"
+                 >
+                    Reset to Default
+                 </button>
+              </div>
+            </div>
+
             <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 text-xs text-slate-400 space-y-2">
               <p className="font-semibold text-slate-300">How to use:</p>
               <ul className="list-disc list-inside space-y-1 ml-1">

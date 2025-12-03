@@ -5,9 +5,10 @@ import { Play, Pause, Volume2, VolumeX, RotateCcw, FastForward, Download } from 
 
 interface AudioPlayerProps {
   src: string;
+  autoPlayEnabled: boolean; // Nova prop
 }
 
-const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
+const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, autoPlayEnabled }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -20,13 +21,25 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
     if (src && audioRef.current) {
       console.log(`[AudioPlayer] New source loaded: ${src}`);
       audioRef.current.playbackRate = playbackRate;
-      audioRef.current.play()
-        .then(() => console.log("[AudioPlayer] Autoplay started"))
-        .catch(e => console.log("[AudioPlayer] Autoplay blocked (interaction needed)", e));
-      setIsPlaying(true);
+      
+      // Verifica a preferência de Auto Play antes de tocar
+      if (autoPlayEnabled) {
+        audioRef.current.play()
+          .then(() => {
+             console.log("[AudioPlayer] Autoplay started");
+             setIsPlaying(true);
+          })
+          .catch(e => {
+             console.log("[AudioPlayer] Autoplay blocked (interaction needed)", e);
+             setIsPlaying(false);
+          });
+      } else {
+        setIsPlaying(false);
+        console.log("[AudioPlayer] Autoplay disabled by user setting.");
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src]);
+  }, [src]); // Importante: Só roda quando a fonte muda, ignorando mudanças no toggle depois de carregado
 
   useEffect(() => {
     if (audioRef.current) {

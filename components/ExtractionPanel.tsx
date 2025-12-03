@@ -1,7 +1,7 @@
 // components/ExtractionPanel.tsx
 
 import React, { useEffect, useRef, useState } from 'react';
-import { FileText, Mic, Sparkles, Zap, BrainCircuit, Settings2, Languages } from 'lucide-react';
+import { FileText, Mic, Sparkles, Zap, BrainCircuit, Settings2, Languages, ToggleLeft, ToggleRight } from 'lucide-react';
 import { ExtractedContent, AudioContent } from '../types';
 import AudioPlayer from './AudioPlayer';
 
@@ -32,7 +32,9 @@ const AVAILABLE_VOICES = [
 const STORAGE_KEYS = {
   STYLE: 'vgs_style_prompt',
   VOICE: 'vgs_voice_selection',
-  TEMP: 'vgs_temperature'
+  TEMP: 'vgs_temperature',
+  AUTO_GEN: 'vgs_auto_generate',
+  AUTO_PLAY: 'vgs_auto_play'
 };
 
 const ExtractionPanel: React.FC<ExtractionPanelProps> = ({ 
@@ -62,18 +64,23 @@ const ExtractionPanel: React.FC<ExtractionPanelProps> = ({
     return saved ? parseFloat(saved) : 1.0;
   });
 
+  // Novos Estados para Automação
+  const [autoGenerate, setAutoGenerate] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.AUTO_GEN) === 'true';
+  });
+
+  const [autoPlay, setAutoPlay] = useState(() => {
+    // Padrão true se não existir, ou o valor salvo
+    const saved = localStorage.getItem(STORAGE_KEYS.AUTO_PLAY);
+    return saved === null ? true : saved === 'true';
+  });
+
   // Persistence Effects
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.STYLE, stylePrompt);
-  }, [stylePrompt]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.VOICE, selectedVoice);
-  }, [selectedVoice]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TEMP, temperature.toString());
-  }, [temperature]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.STYLE, stylePrompt); }, [stylePrompt]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.VOICE, selectedVoice); }, [selectedVoice]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.TEMP, temperature.toString()); }, [temperature]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.AUTO_GEN, autoGenerate.toString()); }, [autoGenerate]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.AUTO_PLAY, autoPlay.toString()); }, [autoPlay]);
 
   // Sync extracted text to local state when processing finishes and text exists
   useEffect(() => {
@@ -85,6 +92,20 @@ const ExtractionPanel: React.FC<ExtractionPanelProps> = ({
       }
     }
   }, [content.text, content.isProcessing]);
+
+  // --- LÓGICA DE AUTO-GERAÇÃO ---
+  // Monitora quando um novo texto chega e a extração termina
+  useEffect(() => {
+    // Se a opção estiver ativa
+    if (autoGenerate) {
+      // Se tiver texto extraído, não estiver processando, e NÃO tiver áudio gerado ainda (nem gerando)
+      // Nota: App.tsx limpa audio.url quando uma nova imagem sobe.
+      if (content.text && !content.isProcessing && !audio.url && !audio.isGenerating && !content.error) {
+        console.log("[ExtractionPanel] Auto-generating audio detected.");
+        onNarrate(content.text, stylePrompt, selectedVoice, temperature);
+      }
+    }
+  }, [content.text, content.isProcessing, autoGenerate, audio.url, audio.isGenerating, content.error, onNarrate, stylePrompt, selectedVoice, temperature]);
 
   if (content.error) {
     return (
@@ -179,9 +200,35 @@ const ExtractionPanel: React.FC<ExtractionPanelProps> = ({
 
       {/* 2. Voice Generation Settings */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4">
-        <div className="flex items-center gap-2 text-slate-300 pb-2 border-b border-slate-800">
-            <Settings2 size={16} />
-            <span className="text-sm font-semibold">Voice Generation Settings</span>
+        
+        {/* Header + Automation Toggles */}
+        <div className="flex flex-wrap items-center justify-between pb-2 border-b border-slate-800 gap-2">
+            <div className="flex items-center gap-2 text-slate-300">
+                <Settings2 size={16} />
+                <span className="text-sm font-semibold">Voice Generation Settings</span>
+            </div>
+
+            <div className="flex items-center gap-4">
+                {/* Auto Gen Toggle */}
+                <button 
+                    onClick={() => setAutoGenerate(!autoGenerate)}
+                    className="flex items-center gap-2 text-xs text-slate-400 hover:text-white transition-colors"
+                    title="Automatically generate audio when text is extracted"
+                >
+                    {autoGenerate ? <ToggleRight size={20} className="text-cyan-500" /> : <ToggleLeft size={20} />}
+                    <span>Auto-Gen</span>
+                </button>
+
+                {/* Auto Play Toggle */}
+                <button 
+                    onClick={() => setAutoPlay(!autoPlay)}
+                    className="flex items-center gap-2 text-xs text-slate-400 hover:text-white transition-colors"
+                    title="Automatically play audio when ready"
+                >
+                    {autoPlay ? <ToggleRight size={20} className="text-green-500" /> : <ToggleLeft size={20} />}
+                    <span>Auto-Play</span>
+                </button>
+            </div>
         </div>
 
         {/* Style Prompt */}
@@ -251,15 +298,20 @@ const ExtractionPanel: React.FC<ExtractionPanelProps> = ({
         </button>
       </div>
 
-      {/* 3. Audio Player */}
-      {audio.url && (
+      {/* 3. Audio Player Area */}
+      
+      {/* Visual Loading Removed as requested */}
+
+      {/* Player (Só aparece se NÃO estiver gerando e TIVER url) */}
+      {!audio.isGenerating && audio.url && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <AudioPlayer src={audio.url} />
+           {/* Passamos a prop autoPlayEnabled baseada no estado do painel */}
+           <AudioPlayer src={audio.url} autoPlayEnabled={autoPlay} />
         </div>
       )}
       
       {audio.error && (
-        <div className="p-3 bg-red-950/30 border border-red-900/50 rounded-lg text-red-400 text-sm">
+        <div className="p-3 bg-red-950/30 border border-red-900/50 rounded-lg text-red-400 text-sm mt-2">
             Error: {audio.error}
         </div>
       )}
